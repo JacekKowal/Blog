@@ -1,21 +1,49 @@
 from django.shortcuts import render, get_object_or_404
 from django.views.generic import ListView
-from .models import Post
-from .forms import EmailPostForm
+from .models import Post, Comment
+from .forms import EmailPostForm, CommentForm
 from django.core.mail import send_mail
+from taggit.models import Tag
 
 
 class PostListView(ListView):
-    model = Post
+    tag = None
     context_object_name = 'posts'
     paginate_by = 3
     template_name = 'index/post/list.html'
 
+    def get_queryset(self):
+        try:
+            tag = get_object_or_404(Tag, slug=self.kwargs['tag_slug'])
+            return Post.published.filter(tags__in=[tag])
+        except KeyError:
+            return Post.published.all()
 
-def post_detail(request, year, month, day, post):
-    post = get_object_or_404(Post, slug=post, status='published', publish__year=year, publish__month=month,
+    def get_context_data(self, *, object_list=None, **kwargs):
+        context = super().get_context_data(**kwargs)
+        try:
+            slug = self.kwargs['tag_slug']
+        except KeyError:
+            return context
+        context['tag'] = Tag.objects.get(slug=slug)
+        return context
+
+
+def post_detail(request, year, month, day, post_slug):
+    post = get_object_or_404(Post, slug=post_slug, status='published', publish__year=year, publish__month=month,
                              publish__day=day)
-    return render(request, 'index/post/detail.html', {'post': post})
+
+    comments = post.comments.filter(active=True)
+    if request.method == 'POST':
+        comment_form = CommentForm(request.POST)
+        if comment_form.is_valid():
+            new_comment = comment_form.save(commit=False)
+            new_comment.post = post
+            new_comment.save()
+    else:
+        comment_form = CommentForm()
+
+    return render(request, 'index/post/detail.html', {'post': post, 'comments': comments, 'comment_form': comment_form})
 
 
 def post_share(request, post_id):
