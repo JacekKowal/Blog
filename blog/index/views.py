@@ -4,12 +4,13 @@ from .models import Post, Comment
 from .forms import EmailPostForm, CommentForm
 from django.core.mail import send_mail
 from taggit.models import Tag
+from django.db.models import Count
 
 
 class PostListView(ListView):
     tag = None
     context_object_name = 'posts'
-    paginate_by = 3
+    paginate_by = 5
     template_name = 'index/post/list.html'
 
     def get_queryset(self):
@@ -21,6 +22,8 @@ class PostListView(ListView):
 
     def get_context_data(self, *, object_list=None, **kwargs):
         context = super().get_context_data(**kwargs)
+        # Add all tags for display at the top:
+        context['tags_top'] = Tag.objects.all()
         try:
             slug = self.kwargs['tag_slug']
         except KeyError:
@@ -43,7 +46,14 @@ def post_detail(request, year, month, day, post_slug):
     else:
         comment_form = CommentForm()
 
-    return render(request, 'index/post/detail.html', {'post': post, 'comments': comments, 'comment_form': comment_form})
+    # Similar posts.
+    post_tags_ids = post.tags.values_list('id', flat=True)
+    similar_posts = Post.published.filter(tags__in=post_tags_ids).exclude(id=post.id)
+    # Limit number and order(top same_tags in order).
+    similar_posts = similar_posts.annotate(same_tags=Count('tags')).order_by('-same_tags', '-publish')[:4]
+
+    return render(request, 'index/post/detail.html',
+                  {'post': post, 'comments': comments, 'comment_form': comment_form, 'similar_posts': similar_posts})
 
 
 def post_share(request, post_id):

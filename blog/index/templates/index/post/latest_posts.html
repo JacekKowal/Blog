@@ -1,0 +1,12 @@
+<div class="p-4">
+    <h4 class="fst-italic">Latest posts</h4>
+    <ol class="list-unstyled mb-0">
+        {% for post in latest_posts %}
+            <li><a href="{{ post.get_absolute_url }}">{{ post.title }}</a>
+                <p class="date">
+                    Published {{ post.publish }} by {{ post.author }}
+                </p>
+            </li>
+        {% endfor %}
+    </ol>
+</div>
